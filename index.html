@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Puzzle Ceria Anak - Belajar & Bermain</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    body {
+      font-family: 'Fredoka', sans-serif;
+      background: linear-gradient(135deg, #FFF7AE 0%, #FFE2E2 50%, #D9F2FF 100%);
+      min-height: 100vh;
+      margin: 0;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+
+    /* Tombol bergaya mainan anak dengan bayangan tebal 3D */
+    .toy-btn {
+      transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s ease;
+      box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
+    }
+    .toy-btn:active {
+      transform: translateY(4px) scale(0.97);
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+    }
+
+    /* Kartu pilihan puzzle */
+    .puzzle-card {
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+      box-shadow: 0 8px 0 rgba(0, 0, 0, 0.12);
+    }
+    .puzzle-card:hover {
+      transform: translateY(-4px) scale(1.02);
+    }
+    .puzzle-card:active {
+      transform: translateY(3px) scale(0.98);
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
+    }
+
+    /* Potongan puzzle yang dapat digeser */
+    .puzzle-piece {
+      touch-action: none;
+      cursor: grab;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      border-radius: 14px;
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.22), inset 0 0 0 3px rgba(255, 255, 255, 0.7);
+    }
+    .puzzle-piece:active, .puzzle-piece.dragging {
+      cursor: grabbing;
+      transform: scale(1.08) rotate(2deg);
+      box-shadow: 0 16px 28px rgba(0, 0, 0, 0.32), inset 0 0 0 4px #FACC15;
+      z-index: 999 !important;
+      transition: none;
+    }
+    .puzzle-piece.selected {
+      transform: scale(1.07);
+      box-shadow: 0 0 0 5px #FACC15, 0 12px 20px rgba(0, 0, 0, 0.28);
+      animation: wiggle 0.8s infinite ease-in-out;
+    }
+
+    @keyframes wiggle {
+      0%, 100% { transform: scale(1.07) rotate(-2deg); }
+      50% { transform: scale(1.07) rotate(2deg); }
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0.4); opacity: 0; }
+      75% { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pop-in {
+      animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    @keyframes floatSlow {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-8px); }
+    }
+    .float-slow {
+      animation: floatSlow 2.5s ease-in-out infinite;
+    }
+
+    /* Slot papan puzzle */
+    .board-slot {
+      border: 3px dashed rgba(59, 130, 246, 0.45);
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+    .board-slot.highlight {
+      background-color: rgba(250, 204, 21, 0.35);
+      border-color: #EAB308;
+    }
+    .board-slot.filled {
+      border: none;
+    }
+
+    /* Kanvas Konfeti */
+    #confetti-canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body class="text-slate-800 flex flex-col min-h-screen">
+
+  <!-- Kanvas Konfeti untuk Perayaan -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- HEADER UTAMA -->
+  <header class="w-full bg-white/90 backdrop-blur-md border-b-4 border-amber-300 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+    <div class="flex items-center gap-2 sm:gap-3">
+      <button id="btn-home" onclick="goHome()" class="hidden toy-btn bg-rose-500 hover:bg-rose-600 text-white font-bold px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-2xl border-2 border-rose-700 flex items-center gap-2 text-base sm:text-xl">
+        <span class="text-2xl">🏠</span>
+        <span class="hidden sm:inline">Menu</span>
+      </button>
+      <div class="flex items-center gap-2">
+        <span class="text-3xl sm:text-4xl">🧩</span>
+        <h1 class="text-xl sm:text-3xl font-bold text-amber-600 tracking-wide drop-shadow-sm">
+          Puzzle Ceria
+        </h1>
+      </div>
+    </div>
+
+    <!-- Kontrol Tingkat Kesulitan & Suara -->
+    <div class="flex items-center gap-2 sm:gap-3">
+      <!-- Pemilih Jumlah Potongan (Visual untuk anak 4 tahun) -->
+      <div class="bg-sky-100 p-1 rounded-2xl border-2 border-sky-300 flex items-center gap-1" title="Jumlah Potongan Puzzle">
+        <button onclick="setGridSize(2, 2)" id="grid-2x2" class="grid-btn px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold text-sm sm:text-base transition bg-sky-500 text-white shadow">
+          4 🧩
+        </button>
+        <button onclick="setGridSize(2, 3)" id="grid-2x3" class="grid-btn px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold text-sm sm:text-base transition text-sky-700 hover:bg-sky-200">
+          6 🧩
+        </button>
+        <button onclick="setGridSize(3, 3)" id="grid-3x3" class="grid-btn px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold text-sm sm:text-base transition text-sky-700 hover:bg-sky-200">
+          9 🧩
+        </button>
+      </div>
+
+      <!-- Tombol Suara / Musik -->
+      <button id="btn-sound" onclick="toggleSound()" class="toy-btn bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold p-2.5 sm:px-4 sm:py-2.5 rounded-2xl border-2 border-amber-600 flex items-center gap-1.5 text-lg sm:text-xl" aria-label="Suara">
+        <span id="sound-icon">🔊</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- LAYAR 1: MENU PILIHAN KATEGORI & GAMBAR -->
+  <main id="home-screen" class="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 flex flex-col gap-5">
+    
+    <!-- Tab Kategori Besar -->
+    <div class="grid grid-cols-3 gap-2.5 sm:gap-4">
+      <button onclick="selectCategory('kendaraan')" id="tab-kendaraan" class="cat-tab toy-btn bg-blue-500 text-white border-4 border-blue-700 rounded-3xl py-3 sm:py-4 px-2 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3 text-base sm:text-2xl font-bold">
+        <span class="text-3xl sm:text-4xl">🚒</span>
+        <span>Kendaraan</span>
+      </button>
+      <button onclick="selectCategory('hewan')" id="tab-hewan" class="cat-tab toy-btn bg-white text-emerald-700 border-4 border-emerald-400 rounded-3xl py-3 sm:py-4 px-2 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3 text-base sm:text-2xl font-bold">
+        <span class="text-3xl sm:text-4xl">🦁</span>
+        <span>Hewan</span>
+      </button>
+      <button onclick="selectCategory('pemandangan')" id="tab-pemandangan" class="cat-tab toy-btn bg-white text-purple-700 border-4 border-purple-400 rounded-3xl py-3 sm:py-4 px-2 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3 text-base sm:text-2xl font-bold">
+        <span class="text-3xl sm:text-4xl">🌈</span>
+        <span>Pemandangan</span>
+      </button>
+    </div>
+
+    <!-- Petunjuk Ramah Anak -->
+    <div class="bg-white/85 rounded-2xl px-4 py-2.5 border-2 border-amber-300 flex items-center justify-center gap-2 text-center shadow-sm">
+      <span class="text-2xl">👆</span>
+      <p id="category-instruction" class="text-base sm:text-xl font-semibold text-slate-700">
+        Pilih gambar <span class="text-blue-600 font-bold">Kendaraan</span> kesukaanmu!
+      </p>
+    </div>
+
+    <!-- Grid Kartu Gambar (5 Gambar per Kategori) -->
+    <div id="cards-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-5 pb-6">
+      <!-- Diisi otomatis oleh JavaScript -->
+    </div>
+  </main>
+
+  <!-- LAYAR 2: AREA BERMAIN PUZZLE -->
+  <section id="game-screen" class="hidden flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 py-3 sm:py-5 flex flex-col justify-between gap-3">
+    
+    <!-- Bar Info Gambar & Bantuan -->
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-white/90 px-4 py-2 rounded-2xl border-2 border-sky-300 shadow-sm">
+      <div class="flex items-center gap-2.5">
+        <button onclick="speakCurrentTitle()" class="toy-btn bg-sky-400 hover:bg-sky-500 text-white p-2 rounded-xl border-2 border-sky-600 text-xl" title="Dengar Nama Gambar">
+          🗣️
+        </button>
+        <h2 id="current-puzzle-title" class="text-lg sm:text-2xl font-bold text-slate-800">
+          Mobil Polisi
+        </h2>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- Bintang Progres -->
+        <div id="progress-badge" class="bg-amber-100 border-2 border-amber-400 px-3 py-1 rounded-xl font-bold text-amber-700 text-base sm:text-lg">
+          ⭐ 0 / 4
+        </div>
+
+        <!-- Tombol Intip Gambar -->
+        <button id="btn-peek" onpointerdown="startPeek()" onpointerup="endPeek()" onpointerleave="endPeek()" class="toy-btn bg-purple-500 hover:bg-purple-600 text-white font-bold px-3.5 py-2 rounded-xl border-2 border-purple-700 flex items-center gap-1.5 text-sm sm:text-lg">
+          <span>👀</span>
+          <span>Intip</span>
+        </button>
+
+        <!-- Tombol Ulangi -->
+        <button onclick="restartCurrentPuzzle()" class="toy-btn bg-orange-400 hover:bg-orange-500 text-white font-bold px-3.5 py-2 rounded-xl border-2 border-orange-600 flex items-center gap-1.5 text-sm sm:text-lg">
+          <span>🔄</span>
+          <span class="hidden sm:inline">Ulang</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Area Utama: Papan Target & Wadah Potongan -->
+    <div class="flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-8 my-auto">
+      
+      <!-- PAPAN TARGET PUZZLE -->
+      <div class="relative bg-white p-2.5 sm:p-3.5 rounded-3xl border-4 border-amber-400 shadow-xl flex items-center justify-center">
+        <div id="puzzle-board" class="relative overflow-hidden rounded-2xl bg-slate-100 shadow-inner">
+          <!-- Bayangan gambar samar (watermark) -->
+          <img id="board-watermark" src="" alt="Bayangan Puzzle" class="absolute inset-0 w-full h-full object-cover opacity-25 pointer-events-none transition-opacity duration-200" />
+          <!-- Grid Slot Target -->
+          <div id="board-slots" class="relative z-10 w-full h-full grid"></div>
+        </div>
+      </div>
+
+      <!-- WADAH POTONGAN PUZZLE -->
+      <div class="w-full lg:w-auto flex-1 max-w-xl bg-white/80 backdrop-blur-sm p-3 sm:p-4 rounded-3xl border-4 border-sky-300 shadow-lg flex flex-col items-center">
+        <p class="text-sm sm:text-base font-bold text-sky-700 mb-2 flex items-center gap-1.5">
+          <span>✋</span> Geser atau ketuk potongan gambar ke papan!
+        </p>
+        <div id="pieces-tray" class="w-full min-h-[150px] sm:min-h-[240px] flex flex-wrap items-center justify-center gap-2.5 sm:gap-3.5 p-2">
+          <!-- Potongan puzzle muncul di sini -->
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- MODAL PERAYAAN MENANG (SELESAI) -->
+  <div id="win-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="pop-in bg-white rounded-3xl border-4 border-amber-400 max-w-md w-full p-5 sm:p-6 text-center shadow-2xl flex flex-col items-center gap-4">
+      <div class="flex items-center justify-center gap-2 text-4xl sm:text-5xl float-slow">
+        <span>🌟</span><span>🏆</span><span>🌟</span>
+      </div>
+      <h2 id="win-heading" class="text-3xl sm:text-4xl font-bold text-amber-500 drop-shadow-sm">
+        HEBAT SEKALI!
+      </h2>
+      <p id="win-subtitle" class="text-lg sm:text-xl font-semibold text-slate-700">
+        Kamu berhasil menyusun Mobil Polisi!
+      </p>
+
+      <!-- Pratinjau Gambar Selesai -->
+      <div class="w-48 h-36 sm:w-56 sm:h-42 rounded-2xl overflow-hidden border-4 border-emerald-400 shadow-md">
+        <img id="win-preview-img" src="" alt="Hasil Puzzle" class="w-full h-full object-cover" />
+      </div>
+
+      <!-- Tombol Aksi Besar -->
+      <div class="grid grid-cols-2 gap-3 w-full mt-1">
+        <button onclick="restartCurrentPuzzle()" class="toy-btn bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold py-3.5 px-4 rounded-2xl border-2 border-amber-600 text-lg sm:text-xl flex items-center justify-center gap-2">
+          <span>🔄</span> Main Lagi
+        </button>
+        <button onclick="nextPuzzle()" class="toy-btn bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 px-4 rounded-2xl border-2 border-emerald-700 text-lg sm:text-xl flex items-center justify-center gap-2">
+          <span>➡️</span> Lanjut
+        </button>
+      </div>
+      <button onclick="goHome()" class="text-slate-500 hover:text-slate-800 font-bold text-base underline pt-1">
+        Pilih Gambar Lain
+      </button>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================================
+       1. DATA 15 ILUSTRASI PUZZLE (3 KATEGORI x 5 GAMBAR)
+       ========================================================================= */
+    const PUZZLE_ITEMS = [
+      // --- KATEGORI 1: KENDARAAN ---
+      {
+        id: 'mobil-polisi',
+        category: 'kendaraan',
+        title: 'Mobil Polisi',
+        draw: (ctx, w, h) => {
+          // Langit cerah & jalan raya
+          ctx.fillStyle = '#BAE6FD';
+          ctx.fillRect(0, 0, w, h);
+          // Awan lembut
+          drawCloud(ctx, 110, 75, 45);
+          drawCloud(ctx, 470, 65, 50);
+          // Rumput & Jalan
+          ctx.fillStyle = '#86EFAC';
+          ctx.fillRect(0, h * 0.65, w, h * 0.15);
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(0, h * 0.76, w, h * 0.24);
+          // Garis jalan kuning
+          ctx.fillStyle = '#FACC15';
+          for (let x = 20; x < w; x += 90) ctx.fillRect(x, h * 0.87, 50, 10);
+
+          // Sirine atas
+          ctx.fillStyle = '#EF4444';
+          roundRect(ctx, 255, 118, 42, 26, 10, true);
+          ctx.fillStyle = '#3B82F6';
+          roundRect(ctx, 297, 118, 42, 26, 10, true);
+          // Cahaya sirine
+          ctx.strokeStyle = '#FACC15';
+          ctx.lineWidth = 5;
+          ctx.beginPath(); ctx.moveTo(297, 108); ctx.lineTo(297, 92); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(270, 112); ctx.lineTo(258, 98); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(324, 112); ctx.lineTo(336, 98); ctx.stroke();
+
+          // Badan Mobil Polisi (Biru & Putih)
+          ctx.fillStyle = '#1D4ED8';
+          roundRect(ctx, 110, 210, 380, 110, 32, true);
+          // Kabin atas putih
+          ctx.fillStyle = '#F8FAFC';
+          roundRect(ctx, 175, 140, 240, 85, 28, true);
+          // Pintu tengah putih
+          ctx.fillStyle = '#FFFFFF';
+          roundRect(ctx, 225, 215, 145, 95, 12, true);
+
+          // Jendela biru muda
+          ctx.fillStyle = '#7DD3FC';
+          roundRect(ctx, 192, 154, 92, 56, 14, true);
+          roundRect(ctx, 300, 154, 95, 56, 14, true);
+
+          // Lencana Bintang Emas di pintu
+          drawStar(ctx, 297, 262, 5, 26, 12, '#FACC15', '#B45309');
+
+          // Lampu depan & belakang
+          ctx.fillStyle = '#FEF08A';
+          roundRect(ctx, 472, 235, 22, 34, 10, true);
+          ctx.fillStyle = '#EF4444';
+          roundRect(ctx, 106, 235, 18, 34, 8, true);
+
+          // Roda besar
+          drawWheel(ctx, 195, 325, 44);
+          drawWheel(ctx, 405, 325, 44);
+        }
+      },
+      {
+        id: 'truk-pemadam',
+        category: 'kendaraan',
+        title: 'Truk Pemadam',
+        draw: (ctx, w, h) => {
+          ctx.fillStyle = '#FEF3C7';
+          ctx.fillRect(0, 0, w, h);
+          drawSun(ctx, 85, 75, 40);
+          drawCloud(ctx, 450, 70, 48);
+
+          // Jalan
+          ctx.fillStyle = '#64748B';
+          ctx.fillRect(0, h * 0.77, w, h * 0.23);
+          ctx.fillStyle = '#F8FAFC';
+          for (let x = 25; x < w; x += 95) ctx.fillRect(x, h * 0.88, 55, 8);
+
+          // Tangga panjang di atas truk
+          ctx.fillStyle = '#CBD5E1';
+          roundRect(ctx, 110, 130, 270, 22, 8, true);
+          ctx.fillStyle = '#64748B';
+          for (let x = 125; x < 365; x += 28) ctx.fillRect(x, 126, 8, 30);
+
+          // Sirine biru
+          ctx.fillStyle = '#38BDF8';
+          roundRect(ctx, 415, 122, 34, 24, 10, true);
+
+          // Badan Truk Merah Cerah
+          ctx.fillStyle = '#DC2626';
+          roundRect(ctx, 95, 195, 285, 130, 20, true);
+          // Kabin depan truk
+          ctx.fillStyle = '#EF4444';
+          roundRect(ctx, 370, 145, 130, 180, 26, true);
+
+          // Garis kuning menyala
+          ctx.fillStyle = '#FACC15';
+          ctx.fillRect(95, 255, 405, 18);
+
+          // Jendela kabin
+          ctx.fillStyle = '#BAE6FD';
+          roundRect(ctx, 405, 165, 78, 65, 14, true);
+
+          // Gulungan selang air
+          ctx.fillStyle = '#94A3B8';
+          ctx.beginPath(); ctx.arc(230, 235, 34, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#38BDF8';
+          ctx.beginPath(); ctx.arc(230, 235, 18, 0, Math.PI * 2); ctx.fill();
+
+          // Roda
+          drawWheel(ctx, 175, 330, 44);
+          drawWheel(ctx, 425, 330, 44);
+        }
+      },
+      {
+        id: 'eksavator',
+        category: 'kendaraan',
+        title: 'Eksavator',
+        draw: (ctx, w, h) => {
+          ctx.fillStyle = '#E0F2FE';
+          ctx.fillRect(0, 0, w, h);
+          drawSun(ctx, 505, 75, 42);
+          drawCloud(ctx, 130, 75, 45);
+
+          // Tanah konstruksi cokelat
+          ctx.fillStyle = '#D97706';
+          ctx.fillRect(0, h * 0.76, w, h * 0.24);
+          // Gundukan tanah
+          ctx.fillStyle = '#B45309';
+          ctx.beginPath();
+          ctx.arc(470, h * 0.78, 85, Math.PI, 0);
+          ctx.fill();
+
+          // Lengan pengeruk (Articulated Arm)
+          ctx.strokeStyle = '#F59E0B';
+          ctx.lineWidth = 28;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(280, 220);
+          ctx.lineTo(375, 115);
+          ctx.lineTo(455, 215);
+          ctx.stroke();
+
+          // Sendok keruk (Bucket)
+          ctx.fillStyle = '#475569';
+          ctx.beginPath();
+          ctx.moveTo(435, 205);
+          ctx.lineTo(495, 210);
+          ctx.quadraticCurveTo(510, 265, 445, 270);
+          ctx.closePath();
+          ctx.fill();
+
+          // Badan & Kabin Eksavator Kuning
+          ctx.fillStyle = '#FACC15';
+          roundRect(ctx, 115, 195, 185, 95, 22, true);
+          roundRect(ctx, 175, 120, 115, 85, 18, true);
+
+          // Kaca kabin
+          ctx.fillStyle = '#7DD3FC';
+          roundRect(ctx, 195, 135, 80, 58, 12, true);
+
+          // Roda rantai (Tracks)
+          ctx.fillStyle = '#334155';
+          roundRect(ctx, 105, 285, 215, 58, 29, true);
+          ctx.fillStyle = '#94A3B8';
+          [140, 212, 285].forEach(cx => {
+            ctx.beginPath(); ctx.arc(cx, 314, 18, 0, Math.PI * 2); ctx.fill();
+          });
+        }
+      },
+      {
+        id: 'mobil-jeep',
+        category: 'kendaraan',
+        title: 'Mobil Jeep',
+        draw: (ctx, w, h) => {
+          // Pemandangan petualangan bukit
+          ctx.fillStyle = '#BAE6FD';
+          ctx.fillRect(0, 0, w, h);
+          drawSun(ctx, 90, 70, 38);
+          ctx.fillStyle = '#86EFAC';
+          ctx.beginPath(); ctx.arc(180, 350, 230, Math.PI, 0); ctx.fill();
+          ctx.fillStyle = '#4ADE80';
+          ctx.beginPath(); ctx.arc(460, 350, 240, Math.PI, 0); ctx.fill();
+          ctx.fillStyle = '#A16207';
+          ctx.fillRect(0, h * 0.78, w, h * 0.22);
+
+          // Ban cadangan di belakang
+          ctx.fillStyle = '#1E293B';
+          roundRect(ctx, 102, 195, 34, 85, 14, true);
+
+          // Rangka atap terbuka (Roll cage)
+          ctx.strokeStyle = '#15803D';
+          ctx.lineWidth = 14;
+          ctx.lineJoin = 'round';
+          ctx.strokeRect(180, 130, 185, 80);
+
+          // Badan Jeep Hijau Gagah
+          ctx.fillStyle = '#22C55E';
+          roundRect(ctx, 130, 200, 340, 105, 24, true);
+          // Garis oranye sporty
+          ctx.fillStyle = '#F97316';
+          roundRect(ctx, 145, 235, 310, 20, 8, true);
+
+          // Lampu depan bulat besar
+          ctx.fillStyle = '#FEF08A';
+          ctx.beginPath(); ctx.arc(465, 228, 18, 0, Math.PI * 2); ctx.fill();
+
+          // Roda Off-Road Besar
+          drawWheel(ctx, 205, 315, 52);
+          drawWheel(ctx, 405, 315, 52);
+        }
+      },
+      {
+        id: 'mobil-ambulan',
+        category: 'kendaraan',
+        title: 'Mobil Ambulan',
+        draw: (ctx, w, h) => {
+          ctx.fillStyle = '#E0F2FE';
+          ctx.fillRect(0, 0, w, h);
+          drawCloud(ctx, 120, 70, 45);
+          drawCloud(ctx, 480, 75, 45);
+
+          ctx.fillStyle = '#64748B';
+          ctx.fillRect(0, h * 0.77, w, h * 0.23);
+          ctx.fillStyle = '#FACC15';
+          for (let x = 20; x < w; x += 90) ctx.fillRect(x, h * 0.88, 50, 8);
+
+          // Sirine merah menyala
+          ctx.fillStyle = '#EF4444';
+          roundRect(ctx, 355, 112, 42, 26, 12, true);
+
+          // Badan Van Ambulan Putih
+          ctx.fillStyle = '#FFFFFF';
+          roundRect(ctx, 115, 138, 370, 185, 30, true);
+          // Garis merah di bawah
+          ctx.fillStyle = '#EF4444';
+          roundRect(ctx, 115, 272, 370, 24, 8, true);
+
+          // Kaca depan
+          ctx.fillStyle = '#7DD3FC';
+          roundRect(ctx, 375, 160, 88, 72, 16, true);
+
+          // Simbol Palang Merah Besar
+          ctx.fillStyle = '#EF4444';
+          roundRect(ctx, 228, 168, 34, 92, 8, true);
+          roundRect(ctx, 199, 197, 92, 34, 8, true);
+
+          // Roda
+          drawWheel(ctx, 195, 325, 44);
+          drawWheel(ctx, 410, 325, 44);
+        }
+      },
+
+      // --- KATEGORI 2: HEWAN ---
+      {
+        id: 'dinosaurus',
+        category: 'hewan',
+        title: 'Dinosaurus',
+        draw: (ctx, w, h) => {
+          // Langit & Gunung Berapi lucu
+          ctx.fillStyle = '#FEF3C7';
+          ctx.fillRect(0, 0, w, h);
+          drawSun(ctx, 500, 75, 42);
+
+          // Gunung
+          ctx.fillStyle = '#A8A29E';
+          ctx.beginPath(); ctx.moveTo(40, 320); ctx.lineTo(140, 130); ctx.lineTo(240, 320); ctx.fill();
+          // Padang rumput
+          ctx.fillStyle = '#86EFAC';
+          ctx.fillRect(0, h * 0.74, w, h * 0.26);
+
+          // Duri punggung oranye
+          ctx.fillStyle = '#F97316';
+          [[205, 195], [180, 225], [155, 255]].forEach(([x, y]) => {
+            ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI * 2); ctx.fill();
+          });
+
+          // Ekor & Badan Dinosaurus Hijau
+          ctx.fillStyle = '#22C55E';
+          ctx.beginPath();
+          ctx.moveTo(110, 295);
+          ctx.quadraticCurveTo(175, 255, 210, 220);
+          ctx.lineTo(310, 220);
+          ctx.lineTo(310, 325);
+          ctx.lineTo(110, 325);
+          ctx.fill();
+
+          // Kaki gemuk
+          roundRect(ctx, 215, 295, 36, 55, 14, true);
+          roundRect(ctx, 275, 295, 36, 55, 14, true);
+
+          // Leher & Kepala besar ramah
+          roundRect(ctx, 265, 105, 135, 95, 42, true);
+          roundRect(ctx, 265, 165, 65, 90, 20, true);
+
+          // Perut kuning lembut
+          ctx.fillStyle = '#FEF08A';
+          roundRect(ctx, 278, 225, 42, 75, 20, true);
+
+          // Tangan kecil lucu
+          ctx.fillStyle = '#16A34A';
+          roundRect(ctx, 320, 225, 36, 18, 9, true);
+
+          // Mata besar & Senyum
+          drawCuteEye(ctx, 355, 140, 15);
+          ctx.strokeStyle = '#14532D';
+          ctx.lineWidth = 5;
+          ctx.beginPath(); ctx.arc(362, 168, 22, 0.1 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+        }
+      },
+      {
+        id: 'kuda',
+        category: 'hewan',
+        title: 'Kuda',
+        draw: (ctx, w, h) => {
+          ctx.fillStyle = '#BAE6FD';
+          ctx.fillRect(0, 0, w, h);
+          drawSun(ctx, 85, 70, 40);
+          drawCloud(ctx, 460, 75, 45);
+          ctx.fillStyle = '#4ADE80';
+          ctx.fillRect(0, h * 0.72, w, h * 0.28);
+
+          // Ekor lebat cokelat tua
+          ctx.fillStyle = '#451A03';
+          ctx.beginPath();
+          ctx.ellipse(150, 250, 26, 55, 0.35, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Kaki-kaki kuda
+          ctx.fillStyle = '#92400E';
+          roundRect(ctx, 195, 265, 28, 85, 12, true);
+          roundRect(ctx, 235, 265, 28, 85, 12, true);
+          roundRect(ctx, 315, 265, 28, 85, 12, true);
+          roundRect(ctx, 355, 265, 28, 85, 12, true);
+
+          // Badan Kuda Cokelat Hangat
+          ctx.fillStyle = '#B45309';
+          roundRect(ctx, 180, 195, 215, 95, 42, true);
+
+          // Leher & Kepala
+          roundRect(ctx, 325, 100, 75, 130, 32, true);
+          roundRect(ctx, 345, 95, 110, 78, 34, true);
+
+          // Moncong krem
+          ctx.fillStyle = '#FDE68A';
+          roundRect(ctx, 405, 112, 55, 58, 24, true);
+
+          // Surai rambut di leher
+          ctx.fillStyle = '#451A03';
+          roundRect(ctx, 310, 95, 26, 105, 13, true);
+
+          // Telinga
+          ctx.fillStyle = '#B45309';
+          ctx.beginPath(); ctx.moveTo(355, 100); ctx.lineTo(368, 65); ctx.lineTo(385, 100); ctx.fill();
+
+          // Mata & Senyum
+          drawCuteEye(ctx, 392, 125, 13);
+          ctx.strokeStyle = '#78350F';
+          ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.arc(432, 148, 12, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
+        }
+      },
+      {
+        id: 'kelinci',
+        category: 'hewan',
+        title: 'Kelinci',
+        draw: (ctx, w, h) => {
+          ctx.fillStyle = '#FCE7F3';
+          ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = '#86EFAC';
+          ctx.fillRect(0, h * 0.74, w, h * 0.26);
+
+          // Telinga panjang kelinci
+          ctx.fillStyle = '#FFFFFF';
+          roundRect(ctx, 235, 35, 44, 125, 22, true);
+          roundRect(ctx, 315, 35, 44, 125, 22, true);
+          ctx.fillStyle = '#F472B6';
+          roundRect(ctx, 247, 50, 20, 95, 10, true);
+          roundRect(ctx, 327, 50, 20, 95, 10, true);
+
+          // Badan gemuk putih
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath(); ctx.ellipse(298, 275, 78, 72, 0, 0, Math.PI * 2); ctx.fill();
+
+          // Kepala bulat
+          ctx.beginPath(); ctx.arc(298, 175, 72, 0, Math.PI * 2); ctx.fill();
+
+          // Pipi merah muda & Mata
+          ctx.fillStyle = '#F9A8D4';
+          ctx.beginPath(); ctx.arc(252, 190, 14, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(344, 190, 14, 0, Math.PI * 2); ctx.fill();
+
+          drawCuteEye(ctx, 270, 165, 14);
+          drawCuteEye(ctx, 326, 165, 14);
+
+          // Hidung & mulut lucu
+          ctx.fillStyle = '#EC4899';
+          ctx.beginPath(); ctx.arc(298, 185, 9, 0, Math.PI * 2); ctx.fill();
+
+          // Wortel Oranye di pelukan kelinci!
+          ctx.fillStyle = '#22C55E';
+          ctx.beginPath(); ctx.arc(355, 245, 18, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#F97316';
+          ctx.beginPath();
+          ctx.moveTo(350, 245);
+          ctx.lineTo(255, 285);
+          ctx.lineTo(340, 285);
+          ctx.closePath();
+          ctx.fill();
+
+          // Kaki kelinci
+          ctx.fillStyle = '#F8FAFC';
+          roundRect(ctx, 235, 325, 48, 28, 14, true);
+          roundRect(ctx, 315, 325, 48, 28, 14, true);
+        }
+      },
+      {
+        id: 'singa',
+        category: 'hewan',
+        title: 'Singa',
+        draw: (ctx, w, h) => {
+          ctx.fillStyle = '#FEF9C3';
+          ctx.fillRect(0, 0, w, h);
+          drawSun(ctx, 510, 70, 40);
+          ctx.fillStyle = '#A3E635';
+          ctx.fillRect(0, h * 0.74, w, h * 0.26);
+
+          // Ekor singa
+          ctx.strokeStyle = '#EAB308';
+          ctx.lineWidth = 12;
+          ctx.beginPath(); ctx.moveTo(210, 290); ctx.quadraticCurveTo(145, 240, 165, 195); ctx.stroke();
+          ctx.fillStyle = '#EA580C';
+          ctx.beginPath(); ctx.arc(165, 195, 18, 0, Math.PI * 2); ctx.fill();
+
+          // Badan Singa Emas
+          ctx.fillStyle = '#FACC15';
+          roundRect(ctx, 215, 225, 165, 115, 45, true);
+
+          // Surai Singa Lebat (Oranye-Cokelat)
+          ctx.fillStyle = '#EA580C';
+          for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const mx = 300 + Math.cos(angle) * 78;
+            const my = 165 + Math.sin(angle) * 78;
+            ctx.beginPath(); ctx.arc(mx, my, 34, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.beginPath(); ctx.arc(300, 165, 82, 0, Math.PI * 2); ctx.fill();
+
+          // Wajah Singa
+          ctx.fillStyle = '#FDE047';
+          ctx.beginPath(); ctx.arc(300, 168, 62, 0, Math.PI * 2); ctx.fill();
+
+          drawCuteEye(ctx, 276, 155, 13);
+          drawCuteEye(ctx, 324, 155, 13);
+
+          // Hidung segitiga & senyum
+          ctx.fillStyle = '#78350F';
+          ctx.beginPath(); ctx.moveTo(290, 175); ctx.lineTo(310, 175); ctx.lineTo(300, 188); ctx.fill();
+          ctx.strokeStyle = '#78350F';
+          ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.arc(300, 188, 16, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
+        }
+      },
+      {
+        id: 'kucing',
+        category: 'hewan',
+        title: 'Kucing',
+        draw: (ctx, w, h) => {
+          ctx.fillStyle = '#E0E7FF';
+          ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = '#FDE68A';
+          ctx.fillRect(0, h * 0.74, w, h * 0.26);
+
+          // Ekor melengkung
+          ctx.strokeStyle = '#FB923C';
+          ctx.lineWidth = 18;
+          ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(215, 315); ctx.quadraticCurveTo(135, 290, 155, 220); ctx.stroke();
+
+          // Badan Kucing Oranye
+          ctx.fillStyle = '#FB923C';
+          roundRect(ctx, 210, 220, 150, 125, 50, true);
+
+          // Telinga segitiga
+          ctx.beginPath(); ctx.moveTo(225, 135); ctx.lineTo(235, 65); ctx.lineTo(275, 110); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(345, 135); ctx.lineTo(335, 65); ctx.lineTo(295, 110); ctx.fill();
+
+          // Kepala Kucing
+          ctx.beginPath(); ctx.arc(285, 160, 68, 0, Math.PI * 2); ctx.fill();
+
+          // Loreng belang di dahi
+          ctx.fillStyle = '#C2410C';
+          roundRect(ctx, 280, 96, 10, 24, 5, true);
+          roundRect(ctx, 262, 102, 9, 20, 5, true);
+          roundRect(ctx, 299, 102, 9, 20, 5, true);
+
+          drawCuteEye(ctx, 260, 152, 14);
+          drawCuteEye(ctx, 310, 152, 14);
+
+          // Hidung pink & Kumis
+          ctx.fillStyle = '#F472B6';
+          ctx.beginPath(); ctx.arc(285, 174, 8, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#431407';
+          ctx.lineWidth = 3;
+          [168, 180].forEach(y => {
+            ctx.beginPath(); ctx.moveTo(235, y); ctx.lineTo(200, y - 4); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(335, y); ctx.lineTo(370, y - 4); ctx.stroke();
+          });
+
+          // Bola benang wol biru lucu di samping
+          ctx.fillStyle = '#38BDF8';
+          ctx.beginPath(); ctx.arc(430, 315, 34, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#0284C7';
+          ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(430, 315, 22, 0.3, 2.5); ctx.stroke();
+        }
+      },
+
+      // --- KATEGORI 3: PEMANDANGAN ---
+      {
+        id: 'pantai',
+        category: 'pemandangan',
+        title: 'Pantai',
+        draw: (ctx, w, h) => {
+          // Langit biru cerah & Matahari tersenyum
+          ctx.fillStyle = '#7DD3FC';
+          ctx.fillRect(0, 0, w, h * 0.52);
+          drawSun(ctx, 495, 75, 45);
+          drawCloud(ctx, 240, 65, 42);
+
+          // Laut biru segar & ombak putih
+          ctx.fillStyle = '#0284C7';
+          ctx.fillRect(0, h * 0.48, w, h * 0.24);
+          ctx.fillStyle = '#E0F2FE';
+          for (let x = 20; x < w; x += 80) {
+            roundRect(ctx, x, h * 0.67, 55, 10, 5, true);
+          }
+
+          // Pasir pantai keemasan
+          ctx.fillStyle = '#FDE047';
+          ctx.fillRect(0, h * 0.7, w, h * 0.3);
+
+          // Batang Pohon Kelapa
+          ctx.strokeStyle = '#92400E';
+          ctx.lineWidth = 22;
+          ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(115, 315); ctx.quadraticCurveTo(95, 210, 135, 130); ctx.stroke();
+
+          // Daun Kelapa Hijau
+          ctx.fillStyle = '#16A34A';
+          [[-55, -15], [55, -15], [-45, 25], [45, 25], [0, -35]].forEach(([dx, dy]) => {
+            ctx.beginPath();
+            ctx.ellipse(135 + dx, 130 + dy, 45, 16, Math.atan2(dy, dx), 0, Math.PI * 2);
+            ctx.fill();
+          });
+
+          // Bola Pantai Warna-warni
+          ctx.fillStyle = '#EF4444';
+          ctx.beginPath(); ctx.arc(385, 325, 34, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#FACC15';
+          ctx.beginPath(); ctx.arc(385, 325, 34, -0.5, 1.2); ctx.lineTo(385, 325); ctx.fill();
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath(); ctx.arc(385, 325, 10, 0, Math.PI * 2); ctx.fill();
+        }
+      },
+      {
+        id: 'malam-bulan-purnama',
+        category: 'pemandangan',
+        title: 'Malam Bulan Purnama',
+        draw: (ctx, w, h) => {
+          // Langit malam biru tua berbintang
+          ctx.fillStyle = '#1E1B4B';
+          ctx.fillRect(0, 0, w, h);
+
+          // Bulan Purnama Besar Bersinar
+          ctx.fillStyle = 'rgba(254, 240, 138, 0.22)';
+          ctx.beginPath(); ctx.arc(445, 110, 88, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#FEF08A';
+          ctx.beginPath(); ctx.arc(445, 110, 62, 0, Math.PI * 2); ctx.fill();
+
+          // Bintang-bintang kuning berkelip
+          const stars = [[90, 65], [185, 115], [285, 55], [140, 185], [335, 155], [535, 200]];
+          stars.forEach(([sx, sy]) => drawStar(ctx, sx, sy, 5, 15, 7, '#FACC15'));
+
+          // Bukit malam hijau gelap
+          ctx.fillStyle = '#064E3B';
+          ctx.beginPath(); ctx.arc(170, 395, 230, Math.PI, 0); ctx.fill();
+          ctx.fillStyle = '#065F46';
+          ctx.beginPath(); ctx.arc(450, 405, 250, Math.PI, 0); ctx.fill();
+
+          // Pohon & Kunang-kunang kuning kecil
+          ctx.fillStyle = '#78350F';
+          ctx.fillRect(145, 225, 20, 70);
+          ctx.fillStyle = '#15803D';
+          ctx.beginPath(); ctx.arc(155, 210, 42, 0, Math.PI * 2); ctx.fill();
+
+          // Kunang-kunang menyala
+          [[240, 270], [310, 290], [380, 255], [485, 285]].forEach(([fx, fy]) => {
+            ctx.fillStyle = '#FEF08A';
+            ctx.beginPath(); ctx.arc(fx, fy, 7, 0, Math.PI * 2); ctx.fill();
+          });
+        }
+      },
+      {
+        id: 'luar-angkasa',
+        category: 'pemandangan',
+        title: 'Luar Angkasa',
+        draw: (ctx, w, h) => {
+          // Kosmos ungu-biru gelap
+          ctx.fillStyle = '#0F172A';
+          ctx.fillRect(0, 0, w, h);
+
+          // Bintang-bintang kecil
+          [[70, 60], [220, 50], [380, 75], [530, 65], [90, 310], [490, 330], [270, 340]].forEach(([sx, sy]) => {
+            drawStar(ctx, sx, sy, 5, 12, 5, '#FEF08A');
+          });
+
+          // Planet Saturnus dengan cincin
+          ctx.fillStyle = '#F59E0B';
+          ctx.beginPath(); ctx.arc(455, 150, 52, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#FDE047';
+          ctx.lineWidth = 12;
+          ctx.beginPath(); ctx.ellipse(455, 150, 88, 22, -0.3, 0, Math.PI * 2); ctx.stroke();
+
+          // Planet Biru kecil
+          ctx.fillStyle = '#38BDF8';
+          ctx.beginPath(); ctx.arc(125, 130, 36, 0, Math.PI * 2); ctx.fill();
+
+          // Roket Ceria meluncur
+          ctx.save();
+          ctx.translate(275, 225);
+          ctx.rotate(-0.45);
+          // Api roket
+          ctx.fillStyle = '#F97316';
+          ctx.beginPath(); ctx.moveTo(-24, 65); ctx.lineTo(0, 120); ctx.lineTo(24, 65); ctx.fill();
+          // Sayap roket merah
+          ctx.fillStyle = '#EF4444';
+          ctx.beginPath(); ctx.moveTo(-36, 30); ctx.lineTo(-62, 72); ctx.lineTo(-22, 62); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(36, 30); ctx.lineTo(62, 72); ctx.lineTo(22, 62); ctx.fill();
+          // Badan roket putih
+          ctx.fillStyle = '#F8FAFC';
+          roundRect(ctx, -36, -65, 72, 130, 36, true);
+          // Ujung roket merah
+          ctx.fillStyle = '#EF4444';
+          ctx.beginPath(); ctx.arc(0, -45, 36, Math.PI, 0); ctx.fill();
+          // Jendela roket
+          ctx.fillStyle = '#38BDF8';
+          ctx.beginPath(); ctx.arc(0, -5, 20, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+      },
+      {
+        id: 'kebun-bunga-lebah',
+        category: 'pemandangan',
+        title: 'Kebun Bunga dan Lebah',
+        draw: (ctx, w, h) => {
+          ctx.fillStyle = '#E0F2FE';
+          ctx.fillRect(0, 0, w, h);
+          drawSun(ctx, 85, 70, 42);
+          ctx.fillStyle = '#4ADE80';
+          ctx.fillRect(0, h * 0.68, w, h * 0.32);
+
+          // 3 Bunga Warna-Warni Besar
+          drawFlower(ctx, 145, 240, '#F43F5E');
+          drawFlower(ctx, 305, 220, '#A855F7');
+          drawFlower(ctx, 465, 245, '#F97316');
+
+          // Lebah Lucu Terbang di Atas Bunga
+          const bx = 355, by = 105;
+          // Sayap putih
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.beginPath(); ctx.ellipse(bx - 8, by - 26, 18, 24, -0.3, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(bx + 14, by - 26, 18, 24, 0.3, 0, Math.PI * 2); ctx.fill();
+          // Badan lebah kuning
+          ctx.fillStyle = '#FACC15';
+          ctx.beginPath(); ctx.ellipse(bx, by, 42, 28, 0, 0, Math.PI * 2); ctx.fill();
+          // Belang hitam
+          ctx.fillStyle = '#1E293B';
+          ctx.fillRect(bx - 16, by - 24, 10, 48);
+          ctx.fillRect(bx + 4, by - 24, 10, 48);
+          // Mata & senyum lebah
+          drawCuteEye(ctx, bx - 24, by - 4, 7);
+        }
+      },
+      {
+        id: 'pemandangan-sawah',
+        category: 'pemandangan',
+        title: 'Pemandangan Sawah',
+        draw: (ctx, w, h) => {
+          // Langit cerah & Matahari
+          ctx.fillStyle = '#BAE6FD';
+          ctx.fillRect(0, 0, w, h * 0.55);
+          drawSun(ctx, 110, 72, 42);
+          drawCloud(ctx, 430, 68, 46);
+
+          // Dua Gunung Biru-Hijau di Kejauhan
+          ctx.fillStyle = '#3B82F6';
+          ctx.beginPath(); ctx.moveTo(80, 230); ctx.lineTo(240, 85); ctx.lineTo(400, 230); ctx.fill();
+          ctx.fillStyle = '#2563EB';
+          ctx.beginPath(); ctx.moveTo(270, 230); ctx.lineTo(430, 95); ctx.lineTo(590, 230); ctx.fill();
+
+          // Terasering Sawah Hijau & Kuning Padi
+          ctx.fillStyle = '#22C55E';
+          ctx.fillRect(0, 215, w, 65);
+          ctx.fillStyle = '#84CC16';
+          ctx.fillRect(0, 275, w, 65);
+          ctx.fillStyle = '#EAB308';
+          ctx.fillRect(0, 335, w, 75);
+
+          // Pematang sawah berkelok
+          ctx.strokeStyle = '#15803D';
+          ctx.lineWidth = 8;
+          ctx.beginPath(); ctx.moveTo(0, 275); ctx.quadraticCurveTo(300, 255, w, 280); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, 335); ctx.quadraticCurveTo(300, 355, w, 330); ctx.stroke();
+
+          // Rumpun Padi Emas di depan
+          ctx.fillStyle = '#FACC15';
+          [110, 290, 480].forEach(px => {
+            for (let a = -2; a <= 2; a++) {
+              ctx.beginPath();
+              ctx.ellipse(px + a * 12, 355, 6, 26, a * 0.25, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          });
+        }
+      }
+    ];
+
+    /* =========================================================================
+       2. FUNGSI PEMBANTU GAMBAR CANVAS (SHAPES & CHARACTERS)
+       ========================================================================= */
+    function roundRect(ctx, x, y, width, height, radius, fill) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      if (fill) ctx.fill();
+    }
+
+    function drawSun(ctx, x, y, r) {
+      ctx.fillStyle = '#FACC15';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#F59E0B';
+      ctx.lineWidth = 5;
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(ang) * (r + 6), y + Math.sin(ang) * (r + 6));
+        ctx.lineTo(x + Math.cos(ang) * (r + 18), y + Math.sin(ang) * (r + 18));
+        ctx.stroke();
+      }
+    }
+
+    function drawCloud(ctx, x, y, size) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.65, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.55, y - size * 0.15, size * 0.55, 0, Math.PI * 2);
+      ctx.arc(x + size * 1.1, y, size * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawWheel(ctx, x, y, r) {
+      ctx.fillStyle = '#1E293B';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#CBD5E1';
+      ctx.beginPath(); ctx.arc(x, y, r * 0.52, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#64748B';
+      ctx.beginPath(); ctx.arc(x, y, r * 0.2, 0, Math.PI * 2); ctx.fill();
+    }
+
+    function drawCuteEye(ctx, x, y, r) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0F172A';
+      ctx.beginPath(); ctx.arc(x + r * 0.18, y, r * 0.62, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(x + r * 0.35, y - r * 0.25, r * 0.24, 0, Math.PI * 2); ctx.fill();
+    }
+
+    function drawStar(ctx, cx, cy, spikes, outerR, innerR, fill, stroke) {
+      let rot = Math.PI / 2 * 3;
+      let step = Math.PI / spikes;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - outerR);
+      for (let i = 0; i < spikes; i++) {
+        ctx.lineTo(cx + Math.cos(rot) * outerR, cy + Math.sin(rot) * outerR);
+        rot += step;
+        ctx.lineTo(cx + Math.cos(rot) * innerR, cy + Math.sin(rot) * innerR);
+        rot += step;
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      if (stroke) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+    }
+
+    function drawFlower(ctx, x, y, petalColor) {
+      // Batang & Daun
+      ctx.strokeStyle = '#15803D';
+      ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, 385); ctx.stroke();
+      ctx.fillStyle = '#16A34A';
+      ctx.beginPath(); ctx.ellipse(x + 22, 315, 22, 11, -0.4, 0, Math.PI * 2); ctx.fill();
+      // Kelopak bunga
+      ctx.fillStyle = petalColor;
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(ang) * 26, y + Math.sin(ang) * 26, 20, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Putik kuning
+      ctx.fillStyle = '#FACC15';
+      ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Merender item ke Data URL resolusi tinggi (600x400)
+    const imageCache = {};
+    function getPuzzleImageURL(item) {
+      if (imageCache[item.id]) return imageCache[item.id];
+      const canvas = document.createElement('canvas');
+      canvas.width = 600;
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d');
+      item.draw(ctx, 600, 400);
+      const url = canvas.toDataURL('image/png');
+      imageCache[item.id] = url;
+      return url;
+    }
+
+    /* =========================================================================
+       3. EFEK SUARA CERIA (WEB AUDIO API) & SUARA PEMANDU (SPEECH SYNTHESIS)
+       ========================================================================= */
+    let soundEnabled = true;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playTone(freq, type = 'sine', duration = 0.15, delay = 0, vol = 0.25) {
+      if (!soundEnabled) return;
+      try {
+        initAudio();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime + delay);
+        osc.stop(audioCtx.currentTime + delay + duration);
+      } catch (e) {}
+    }
+
+    function playPopSound() {
+      playTone(520, 'sine', 0.1, 0, 0.2);
+      playTone(680, 'sine', 0.1, 0.04, 0.2);
+    }
+
+    function playSnapSound() {
+      playTone(587.33, 'triangle', 0.16, 0, 0.3);    // D5
+      playTone(880.00, 'triangle', 0.25, 0.08, 0.3); // A5
+    }
+
+    function playGentleBounce() {
+      playTone(260, 'sine', 0.15, 0, 0.18);
+      playTone(210, 'sine', 0.18, 0.08, 0.18);
+    }
+
+    function playWinFanfare() {
+      const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50];
+      const times = [0, 0.12, 0.24, 0.36, 0.55, 0.70];
+      notes.forEach((n, idx) => playTone(n, 'triangle', 0.28, times[idx], 0.3));
+    }
+
+    function speakText(text) {
+      if (!soundEnabled || !('speechSynthesis' in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'id-ID';
+        utter.rate = 0.95;
+        utter.pitch = 1.25; // Nada ramah & ceria untuk anak
+        window.speechSynthesis.speak(utter);
+      } catch (e) {}
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('sound-icon').textContent = soundEnabled ? '🔊' : '🔇';
+      if (soundEnabled) playPopSound();
+    }
+
+    /* =========================================================================
+       4. STATE PERMAINAN & NAVIGASI
+       ========================================================================= */
+    let currentCategory = 'kendaraan';
+    let rows = 2;
+    let cols = 2;
+    let currentPuzzle = null;
+    let placedCount = 0;
+    let selectedPieceEl = null;
+
+    function selectCategory(cat) {
+      currentCategory = cat;
+      playPopSound();
+
+      // Perbarui gaya tab aktif
+      const tabs = {
+        kendaraan: { active: 'bg-blue-500 text-white border-blue-700', inactive: 'bg-white text-blue-700 border-blue-300', label: 'Kendaraan', color: 'text-blue-600' },
+        hewan: { active: 'bg-emerald-500 text-white border-emerald-700', inactive: 'bg-white text-emerald-700 border-emerald-300', label: 'Hewan', color: 'text-emerald-600' },
+        pemandangan: { active: 'bg-purple-500 text-white border-purple-700', inactive: 'bg-white text-purple-700 border-purple-300', label: 'Pemandangan', color: 'text-purple-600' }
+      };
+
+      Object.keys(tabs).forEach(key => {
+        const el = document.getElementById(`tab-${key}`);
+        el.className = `cat-tab toy-btn rounded-3xl py-3 sm:py-4 px-2 border-4 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3 text-base sm:text-2xl font-bold ${key === cat ? tabs[key].active : tabs[key].inactive}`;
+      });
+
+      document.getElementById('category-instruction').innerHTML =
+        `Pilih gambar <span class="${tabs[cat].color} font-bold">${tabs[cat].label}</span> kesukaanmu!`;
+
+      renderCategoryCards();
+    }
+
+    function renderCategoryCards() {
+      const grid = document.getElementById('cards-grid');
+      grid.innerHTML = '';
+
+      const items = PUZZLE_ITEMS.filter(item => item.category === currentCategory);
+      items.forEach(item => {
+        const imgURL = getPuzzleImageURL(item);
+        const card = document.createElement('button');
+        card.className = 'puzzle-card bg-white rounded-3xl p-2.5 sm:p-3 border-4 border-amber-300 flex flex-col items-center gap-2 text-center focus:outline-none';
+        card.onclick = () => startPuzzle(item);
+
+        card.innerHTML = `
+          <div class="w-full aspect-[3/2] rounded-2xl overflow-hidden bg-slate-100 border-2 border-slate-200">
+            <img src="${imgURL}" alt="${item.title}" class="w-full h-full object-cover" />
+          </div>
+          <span class="text-base sm:text-lg font-bold text-slate-800 leading-tight py-0.5">
+            ${item.title}
+          </span>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function setGridSize(r, c) {
+      rows = r;
+      cols = c;
+      playPopSound();
+
+      document.querySelectorAll('.grid-btn').forEach(btn => {
+        btn.className = 'grid-btn px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold text-sm sm:text-base transition text-sky-700 hover:bg-sky-200';
+      });
+      const activeBtn = document.getElementById(`grid-${r}x${c}`);
+      if (activeBtn) {
+        activeBtn.className = 'grid-btn px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold text-sm sm:text-base transition bg-sky-500 text-white shadow';
+      }
+
+      if (currentPuzzle && !document.getElementById('game-screen').classList.contains('hidden')) {
+        buildPuzzleBoard();
+      }
+    }
+
+    function goHome() {
+      playPopSound();
+      stopConfetti();
+      document.getElementById('win-modal').classList.add('hidden');
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('btn-home').classList.add('hidden');
+      document.getElementById('home-screen').classList.remove('hidden');
+    }
+
+    function startPuzzle(item) {
+      currentPuzzle = item;
+      playPopSound();
+      speakText(item.title);
+
+      document.getElementById('home-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+      document.getElementById('btn-home').classList.remove('hidden');
+      document.getElementById('win-modal').classList.add('hidden');
+
+      document.getElementById('current-puzzle-title').textContent = item.title;
+      buildPuzzleBoard();
+    }
+
+    function speakCurrentTitle() {
+      if (currentPuzzle) {
+        playPopSound();
+        speakText(currentPuzzle.title);
+      }
+    }
+
+    function restartCurrentPuzzle() {
+      playPopSound();
+      stopConfetti();
+      document.getElementById('win-modal').classList.add('hidden');
+      if (currentPuzzle) buildPuzzleBoard();
+    }
+
+    function nextPuzzle() {
+      const catItems = PUZZLE_ITEMS.filter(i => i.category === currentPuzzle.category);
+      const idx = catItems.findIndex(i => i.id === currentPuzzle.id);
+      const nextItem = catItems[(idx + 1) % catItems.length];
+      stopConfetti();
+      startPuzzle(nextItem);
+    }
+
+    /* =========================================================================
+       5. LOGIKA PAPAN PUZZLE & DRAG-AND-DROP / TAP-TO-PLACE
+       ========================================================================= */
+    function getBoardDimensions() {
+      const vw = window.innerWidth;
+      if (vw < 450) return { width: 300, height: 200 };
+      if (vw < 768) return { width: 390, height: 260 };
+      return { width: 480, height: 320 };
+    }
+
+    function buildPuzzleBoard() {
+      placedCount = 0;
+      selectedPieceEl = null;
+      const totalPieces = rows * cols;
+      updateProgress();
+
+      const { width: boardW, height: boardH } = getBoardDimensions();
+      const board = document.getElementById('puzzle-board');
+      board.style.width = `${boardW}px`;
+      board.style.height = `${boardH}px`;
+
+      const imgURL = getPuzzleImageURL(currentPuzzle);
+      const watermark = document.getElementById('board-watermark');
+      watermark.src = imgURL;
+      watermark.style.opacity = '0.24';
+
+      const slotsContainer = document.getElementById('board-slots');
+      slotsContainer.innerHTML = '';
+      slotsContainer.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+      slotsContainer.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+      const pieceW = boardW / cols;
+      const pieceH = boardH / rows;
+
+      // Buat slot target
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const index = r * cols + c;
+          const slot = document.createElement('div');
+          slot.className = 'board-slot relative w-full h-full flex items-center justify-center';
+          slot.dataset.index = index;
+
+          // Mendukung tap pada slot jika anak mengetuk potongan lebih dulu
+          slot.addEventListener('click', () => {
+            if (selectedPieceEl && !slot.classList.contains('filled')) {
+              const pieceIdx = parseInt(selectedPieceEl.dataset.index, 10);
+              if (pieceIdx === index) {
+                snapPieceToSlot(selectedPieceEl, slot);
+              } else {
+                playGentleBounce();
+              }
+            }
+          });
+
+          slotsContainer.appendChild(slot);
+        }
+      }
+
+      // Buat potongan puzzle dan acak urutannya
+      const tray = document.getElementById('pieces-tray');
+      tray.innerHTML = '';
+
+      const indices = Array.from({ length: totalPieces }, (_, i) => i);
+      shuffleArray(indices);
+
+      // Ukuran potongan di wadah sedikit lebih ringkas agar muat rapi
+      const trayScale = cols === 3 ? 0.82 : 0.88;
+      const trayPieceW = Math.round(pieceW * trayScale);
+      const trayPieceH = Math.round(pieceH * trayScale);
+
+      indices.forEach(index => {
+        const r = Math.floor(index / cols);
+        const c = index % cols;
+
+        const piece = document.createElement('div');
+        piece.className = 'puzzle-piece bg-white relative flex-shrink-0';
+        piece.dataset.index = index;
+        piece.style.width = `${trayPieceW}px`;
+        piece.style.height = `${trayPieceH}px`;
+        piece.style.backgroundImage = `url(${imgURL})`;
+        piece.style.backgroundSize = `${trayPieceW * cols}px ${trayPieceH * rows}px`;
+        piece.style.backgroundPosition = `-${c * trayPieceW}px -${r * trayPieceH}px`;
+
+        setupPieceInteraction(piece, pieceW, pieceH, trayPieceW, trayPieceH);
+        tray.appendChild(piece);
+      });
+    }
+
+    function setupPieceInteraction(piece, fullW, fullH, trayW, trayH) {
+      let isDragging = false;
+      let startX = 0, startY = 0;
+      let hasMoved = false;
+
+      piece.addEventListener('pointerdown', (e) => {
+        if (piece.dataset.placed === 'true') return;
+        e.preventDefault();
+        initAudio();
+        playPopSound();
+
+        isDragging = true;
+        hasMoved = false;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        piece.setPointerCapture(e.pointerId);
+        piece.classList.add('dragging');
+      });
+
+      piece.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+          hasMoved = true;
+        }
+        piece.style.transform = `translate(${dx}px, ${dy}px) scale(1.12)`;
+
+        // Sorot slot target jika berada di dekat posisi yang benar
+        highlightNearestSlot(piece);
+      });
+
+      piece.addEventListener('pointerup', (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        piece.classList.remove('dragging');
+        clearSlotHighlights();
+
+        const targetIndex = parseInt(piece.dataset.index, 10);
+        const targetSlot = document.querySelector(`.board-slot[data-index="${targetIndex}"]`);
+
+        // Jika tidak digeser (hanya ketukan jari/klik), pilih potongan untuk mode Tap-to-Place
+        if (!hasMoved) {
+          piece.style.transform = '';
+          selectPieceForTap(piece);
+          return;
+        }
+
+        // Cek jarak pusat potongan terhadap pusat slot target (toleransi besar untuk anak 4 tahun!)
+        const pieceRect = piece.getBoundingClientRect();
+        const slotRect = targetSlot.getBoundingClientRect();
+
+        const pieceCenterX = pieceRect.left + pieceRect.width / 2;
+        const pieceCenterY = pieceRect.top + pieceRect.height / 2;
+        const slotCenterX = slotRect.left + slotRect.width / 2;
+        const slotCenterY = slotRect.top + slotRect.height / 2;
+
+        const dist = Math.hypot(pieceCenterX - slotCenterX, pieceCenterY - slotCenterY);
+        const snapTolerance = Math.max(slotRect.width, slotRect.height) * 0.72;
+
+        if (dist <= snapTolerance) {
+          snapPieceToSlot(piece, targetSlot);
+        } else {
+          // Kembalikan dengan lembut ke wadah
+          piece.style.transform = '';
+          playGentleBounce();
+        }
+      });
+    }
+
+    function selectPieceForTap(piece) {
+      if (selectedPieceEl === piece) {
+        piece.classList.remove('selected');
+        selectedPieceEl = null;
+        return;
+      }
+      if (selectedPieceEl) {
+        selectedPieceEl.classList.remove('selected');
+      }
+      selectedPieceEl = piece;
+      piece.classList.add('selected');
+    }
+
+    function highlightNearestSlot(piece) {
+      clearSlotHighlights();
+      const targetIndex = parseInt(piece.dataset.index, 10);
+      const targetSlot = document.querySelector(`.board-slot[data-index="${targetIndex}"]`);
+      if (!targetSlot) return;
+
+      const pRect = piece.getBoundingClientRect();
+      const sRect = targetSlot.getBoundingClientRect();
+      const dist = Math.hypot(
+        (pRect.left + pRect.width / 2) - (sRect.left + sRect.width / 2),
+        (pRect.top + pRect.height / 2) - (sRect.top + sRect.height / 2)
+      );
+      if (dist <= Math.max(sRect.width, sRect.height) * 0.72) {
+        targetSlot.classList.add('highlight');
+      }
+    }
+
+    function clearSlotHighlights() {
+      document.querySelectorAll('.board-slot.highlight').forEach(s => s.classList.remove('highlight'));
+    }
+
+    function snapPieceToSlot(piece, slot) {
+      playSnapSound();
+
+      if (selectedPieceEl === piece) {
+        selectedPieceEl = null;
+      }
+
+      const index = parseInt(piece.dataset.index, 10);
+      const r = Math.floor(index / cols);
+      const c = index % cols;
+
+      const { width: boardW, height: boardH } = getBoardDimensions();
+      const slotW = boardW / cols;
+      const slotH = boardH / rows;
+      const imgURL = getPuzzleImageURL(currentPuzzle);
+
+      // Tempatkan potongan secara presisi ke dalam slot papan
+      piece.dataset.placed = 'true';
+      piece.className = 'pop-in w-full h-full pointer-events-none';
+      piece.style.transform = '';
+      piece.style.width = '100%';
+      piece.style.height = '100%';
+      piece.style.borderRadius = '0px';
+      piece.style.boxShadow = 'none';
+      piece.style.backgroundImage = `url(${imgURL})`;
+      piece.style.backgroundSize = `${slotW * cols}px ${slotH * rows}px`;
+      piece.style.backgroundPosition = `-${c * slotW}px -${r * slotH}px`;
+
+      slot.classList.add('filled');
+      slot.innerHTML = '';
+      slot.appendChild(piece);
+
+      placedCount++;
+      updateProgress();
+
+      // Cek apakah semua potongan sudah terpasang
+      if (placedCount === rows * cols) {
+        handlePuzzleComplete();
+      }
+    }
+
+    function updateProgress() {
+      const total = rows * cols;
+      document.getElementById('progress-badge').textContent = `⭐ ${placedCount} / ${total}`;
+    }
+
+    function startPeek() {
+      playPopSound();
+      const watermark = document.getElementById('board-watermark');
+      watermark.style.opacity = '0.92';
+      watermark.style.zIndex = '25';
+    }
+
+    function endPeek() {
+      const watermark = document.getElementById('board-watermark');
+      watermark.style.opacity = '0.24';
+      watermark.style.zIndex = '0';
+    }
+
+    function handlePuzzleComplete() {
+      playWinFanfare();
+      startConfetti();
+
+      const praises = ['Hebat sekali!', 'Pintar sekali!', 'Yey, kamu berhasil!'];
+      const randomPraise = praises[Math.floor(Math.random() * praises.length)];
+      speakText(`${randomPraise} Ini adalah ${currentPuzzle.title}`);
+
+      setTimeout(() => {
+        document.getElementById('win-heading').textContent = randomPraise.toUpperCase();
+        document.getElementById('win-subtitle').textContent = `Kamu berhasil menyusun ${currentPuzzle.title}!`;
+        document.getElementById('win-preview-img').src = getPuzzleImageURL(currentPuzzle);
+        document.getElementById('win-modal').classList.remove('hidden');
+      }, 650);
+    }
+
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    /* =========================================================================
+       6. ANIMASI KONFETI PERAYAAN
+       ========================================================================= */
+    let confettiAnimId = null;
+    let particles = [];
+
+    function startConfetti() {
+      const canvas = document.getElementById('confetti-canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const colors = ['#EF4444', '#FACC15', '#22C55E', '#3B82F6', '#EC4899', '#A855F7'];
+      particles = Array.from({ length: 110 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height - canvas.height,
+        w: 10 + Math.random() * 10,
+        h: 10 + Math.random() * 10,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        speedY: 3 + Math.random() * 4,
+        speedX: -2 + Math.random() * 4,
+        rot: Math.random() * 360,
+        rotSpeed: -5 + Math.random() * 10
+      }));
+
+      function renderConfetti() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.y += p.speedY;
+          p.x += p.speedX;
+          p.rot += p.rotSpeed;
+          if (p.y > canvas.height) p.y = -20;
+
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate((p.rot * Math.PI) / 180);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          ctx.restore();
+        });
+        confettiAnimId = requestAnimationFrame(renderConfetti);
+      }
+      renderConfetti();
+    }
+
+    function stopConfetti() {
+      if (confettiAnimId) {
+        cancelAnimationFrame(confettiAnimId);
+        confettiAnimId = null;
+      }
+      const canvas = document.getElementById('confetti-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Inisialisasi aplikasi saat halaman dimuat
+    window.addEventListener('DOMContentLoaded', () => {
+      renderCategoryCards();
+    });
+
+    window.addEventListener('resize', () => {
+      if (!document.getElementById('game-screen').classList.contains('hidden') && currentPuzzle && placedCount === 0) {
+        buildPuzzleBoard();
+      }
+    });
+  </script>
+</body>
+</html>
